@@ -4,6 +4,8 @@
 import os
 import configparser
 import settings
+import xml.etree.ElementTree as ET
+NameSpace = "http://www.virtualbox.org/"
 
 
 class CONFIG():
@@ -13,6 +15,7 @@ class CONFIG():
     def __init__(self):
         self.MachineFolders = []
         self.VBoxSettingPATH = ""
+        self.BackupFolder = ""
         self.config_file_path = ""
 
     def read_file(self, config_file_path: str) -> int:
@@ -79,6 +82,37 @@ class CONFIG():
             print("見つからなかったディレクトリ:{0}".format(error_dirs))
             return -1
 
+        #   MachineFolders
+        error_dirs = ""
+        if config['VBox']['BackupFolder'] is None:
+            print("['VBox']['BackupFolder']が存在しません")
+            error_flag = True
+        else:
+            if os.path.isdir(config['VBox']['BackupFolder']):
+                if config['VBox']['BackupFolder'][-1] != "/":
+                    self.BackupFolder = config['VBox']['BackupFolder'] + "/"
+                else:
+                    self.BackupFolder = config['VBox']['BackupFolder']
+            else:
+                error_flag = True
+                error_dirs = "{0} '{1}' ".format(error_dirs, config['VBox']['BackupFolder'])
+
+        if error_flag is True:
+            print("[error] 設定ファイルで指定されたディレクトリ(BackupFolder)が見つかりませんでした．")
+            print("見つからなかったディレクトリ:{0}".format(error_dirs))
+            return -1
+
+        #   MachineName
+        error_dirs = ""
+        if config['VBox']['MachineName'] is None:
+            print("['VBox']['MachineName']が存在しません")
+            error_flag = True
+        else:
+            self.MachineName = config['VBox']['MachineName']
+
+        if error_flag is True:
+            return -1
+
         #   VBoxSettingPATH
         if config['VBox']['VBoxSettingPATH'] is None:
             print("['VBox']['VBoxSettingPATH']が存在しません")
@@ -93,12 +127,68 @@ class CONFIG():
             print("[error] 設定ファイルで指定されたファイル(VBoxSettingPATH)が見つかりませんでした．")
             print("見つからなかったXMLファイル:{0}".format(xml_file))
             return -1
-
-        if settings.DEBUG is True:
-            print("[DEBUG]")
-            print("MachineFolders:{0}".format(self.MachineFolders))
-            print("VBoxSettingPATH:{0}".format(self.VBoxSettingPATH))
-            print("config_file_path:{0}".format(self.config_file_path))
-            print("[/DEBUG]\n")
-
         return 0
+
+    def __str__(self):
+        print("[DEBUG]")
+        print("MachineFolders:{0}".format(self.MachineFolders))
+        print("VBoxSettingPATH:{0}".format(self.VBoxSettingPATH))
+        print("config_file_path:{0}".format(self.config_file_path))
+        print("[/DEBUG]\n")
+
+
+class VirtualMachine():
+
+    def __init__(self, vm_path: str):
+        '''init
+
+        Parameters
+        ----------
+        vbox_file_path : str
+            vboxへのpath
+        '''
+        self.vm_path = vm_path
+        self.vm_setting_tree = ET.parse(self.vm_path)
+        self.vm_name = ""
+        self.uuid = ""
+        self.is_define = bool
+        # get MachineEntry
+        for node in self.vm_setting_tree.findall(".//{{{0}}}Machine".format(NameSpace)):
+            self.uuid = node.attrib["uuid"][1:-1]
+            self.vm_name = node.attrib["name"]
+
+
+class VirtualBox():
+
+    def __init__(self, vbox_setting_path: str):
+        '''VirtualBox
+
+        Parameters
+        ----------
+        vbox_setting_path : str
+            virtual box の設定ファイル(xml)のパス
+        '''
+        self.vbox_setting_path = vbox_setting_path
+        self.vbox_setting_tree = ET.parse(self.vbox_setting_path)
+        self.vms = []
+        # get MachineEntry
+        for node in self.vbox_setting_tree.findall(".//{{{0}}}MachineEntry".format(NameSpace)):
+            self.vms.append(VirtualMachine(vm_path=node.attrib["src"]))
+        # default Machine Folder
+        node = self.vbox_setting_tree.find(".//{{{0}}}SystemProperties".format(NameSpace))
+        self.defaultMachineFolder = node.attrib["defaultMachineFolder"]
+
+    def is_define(self, uuid):
+        for vm in self.vms:
+            if vm.uuid == uuid:
+                return True
+        return False
+
+    def __str__(self):
+        vbox_info = "[debug] Virtual box class\n"
+        vbox_info += "\tvbox_setting_path:{0}\n".format(self.vbox_setting_path)
+        vbox_info += "\tdefaultMachineFolder:{0}\n".format(self.defaultMachineFolder)
+        vbox_info += "\tvirtual machines (合計:{0})\n".format(len(self.vms))
+        for vm in self.vms:
+            vbox_info += "\t  - uuid:{0}\tname:{1}\n".format(vm.uuid, vm.vm_name)
+        return vbox_info
