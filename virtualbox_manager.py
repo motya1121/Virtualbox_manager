@@ -24,24 +24,17 @@ def status(args):
     for node in tree.findall(".//{{{0}}}MachineEntry".format(NameSpace)):
         xml_vbox_dict[node.attrib["uuid"][1:-1]] = node.attrib["src"]
 
+    for uuid, dir_vbox in xml_vbox_dict.items():
+        print("{uuid}: 定義済み (file: {f_name})".format(f_name=dir_vbox, uuid=uuid))
+
     # GET directory DATA
-    for dir_path in config.MachineFolders:
-        dir_vbox_list = glob.glob('{0}**/*.vbox'.format(dir_path), recursive=True)
-
-    # PRINT DATA
-    all_flag = True if args.added is args.deled else False
-    for dir_vbox in dir_vbox_list:
-        # GET uuid
-        vbox_xml = ET.parse(dir_vbox)
-        for node in vbox_xml.findall(".//{{{0}}}Machine".format(NameSpace)):
-            uuid = node.attrib["uuid"][1:-1]
-
-        # print data
-        if dir_vbox in xml_vbox_dict.values() and (all_flag is True or (all_flag is False and args.added is True)):
-            print("{uuid}: 定義済み (file: {f_name})".format(f_name=dir_vbox, uuid=uuid))
-        elif dir_vbox not in xml_vbox_dict.values() and (all_flag is True or
-                                                         (all_flag is False and args.deled is True)):
-            print("{uuid}: 未定義   (file: {f_name})".format(f_name=dir_vbox, uuid=uuid))
+    if args.all is True:
+        dir_vbox_list = glob.glob('{0}**/*.vbox'.format(config.ArchiveDir), recursive=True)
+        for dir_vbox in dir_vbox_list:
+            vbox_xml = ET.parse(dir_vbox)
+            for node in vbox_xml.findall(".//{{{0}}}Machine".format(NameSpace)):
+                uuid = node.attrib["uuid"][1:-1]
+                print("{uuid}: 未定義   (file: {f_name})".format(f_name=dir_vbox, uuid=uuid))
 
 
 def define(args):
@@ -150,8 +143,8 @@ def main():
     subparsers = parser.add_subparsers()
 
     parser_add = subparsers.add_parser('status', description='制御可能なVMの状態を表示', help='see `status -h`')
-    parser_add.add_argument('-a', '--added', action='store_true', help='Virtual Boxに登録されているVMのみ', default=False)
-    parser_add.add_argument('-d', '--deled', action='store_true', help='Virtual Boxに登録されているVM + Dropbox上のアーカイブ', default=False)
+    parser_add.add_argument('-l', '--list', action='store_true', help='Virtual Boxに登録されているVMのみ', default=False)
+    parser_add.add_argument('-a', '--all', action='store_true', help='Virtual Boxに登録されているVM + Dropbox上のアーカイブ', default=False)
     parser_add.set_defaults(handler=status)
 
     parser_commit = subparsers.add_parser('define', description='VMを定義する', help='see `define -h`')
