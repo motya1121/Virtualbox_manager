@@ -4,9 +4,9 @@
 import argparse
 import os
 import classes
-import settings
 import xml.etree.ElementTree as ET
 import glob
+import error
 
 NameSpace = "http://www.virtualbox.org/"
 
@@ -146,12 +146,12 @@ def undefine(args):
 def main():
     # コマンドラインパーサーを作成
     parser = argparse.ArgumentParser(description='Virtual Box Manager')
-    parser.add_argument('-cf', '--config_file', help='使用する設定ファイル')
+    parser.add_argument('-cf', '--config_file', help='使用する設定ファイル(指定なしでこのpythonファイルと同じディレクトリにある"settings.json"を読み込み)')
     subparsers = parser.add_subparsers()
 
-    parser_add = subparsers.add_parser('status', description='登録さてている全てのVMの状態を表示', help='see `status -h`')
-    parser_add.add_argument('-a', '--added', action='store_true', help='定義されているVMのみ', default=False)
-    parser_add.add_argument('-d', '--deled', action='store_true', help='定義されていないVMのみ', default=False)
+    parser_add = subparsers.add_parser('status', description='制御可能なVMの状態を表示', help='see `status -h`')
+    parser_add.add_argument('-a', '--added', action='store_true', help='Virtual Boxに登録されているVMのみ', default=False)
+    parser_add.add_argument('-d', '--deled', action='store_true', help='Virtual Boxに登録されているVM + Dropbox上のアーカイブ', default=False)
     parser_add.set_defaults(handler=status)
 
     parser_commit = subparsers.add_parser('define', description='VMを定義する', help='see `define -h`')
@@ -168,7 +168,7 @@ def main():
 
     # get config file
     if type(args.config_file) is not str:
-        config_file = ""
+        config_file = os.path.dirname(os.path.abspath(__file__)) + '/settings.json'
     else:
         config_file = args.config_file
     config.read_file(config_file_path=config_file)
