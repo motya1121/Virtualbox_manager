@@ -8,6 +8,7 @@ import xml.etree.ElementTree as ET
 import glob
 import error
 import subprocess
+import json
 
 NameSpace = "http://www.virtualbox.org/"
 
@@ -88,6 +89,8 @@ def archive(args):
     # init valiables
     vm_uuid = args.vm_uuid[0]
     vm_path = ''
+    vm_memo = ''
+    vm_name = ''
     tree = ET.parse(config.VBoxSettingPATH)
 
     # init xml file
@@ -103,6 +106,13 @@ def archive(args):
     if error_flag is True:
         print("[error] 指定したファイルは定義されていません")
         return - 1
+
+    # get vm infomation
+    vm_info_tree = ET.parse(vm_path)
+    Machine = vm_info_tree.find(".//{{{0}}}Machine".format(NameSpace))
+    vm_name = Machine.attrib["name"]
+    Description = Machine.find(".//{{{0}}}Description".format(NameSpace))
+    vm_memo = Description.text
 
     # remove to MachineRegistry
     registry = tree.find(".//{{{0}}}MachineRegistry".format(NameSpace))
@@ -123,7 +133,7 @@ def archive(args):
     tree = ET.ElementTree(root)
 
     # archive
-    com = "tar -zcvf {0}.tar.gz {1}".format(
+    com = "tar -zcf {0}.tar.gz {1}".format(
         os.path.join(config.ArchiveDir, vm_uuid),
         os.path.basename(os.path.dirname(vm_path)))
     subprocess.check_call(com.split(' '), cwd=os.path.dirname(os.path.dirname(vm_path)))
@@ -134,6 +144,24 @@ def archive(args):
 
     # save XML file
     tree.write(config.VBoxSettingPATH, encoding="UTF-8", xml_declaration=True)
+
+    # update archive info
+    archive_info = {}
+    archive_file_path = os.path.join(config.ArchiveDir, 'archive_info.json')
+    if os.path.isfile(archive_file_path):
+        with open(archive_file_path, 'r') as conf_file:
+            archive_info = json.load(conf_file)
+    else:
+        archive_info = {'vm_data': []}
+    archive_info['vm_data'].append(
+        {
+            'uuid': vm_uuid,
+            'name': vm_name,
+            'memo': vm_memo
+        }
+    )
+    with open(archive_file_path, 'w') as conf_file:
+        json.dump(archive_info, conf_file, ensure_ascii=False, indent=4)
 
     print("[info] {0}を未定義にしました．".format(vm_uuid))
 
