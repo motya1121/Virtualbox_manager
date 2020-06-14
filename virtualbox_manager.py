@@ -7,6 +7,7 @@ import classes
 import xml.etree.ElementTree as ET
 import glob
 import error
+import subprocess
 
 NameSpace = "http://www.virtualbox.org/"
 
@@ -37,7 +38,8 @@ def status(args):
                 print("{uuid}: 未定義   (file: {f_name})".format(f_name=dir_vbox, uuid=uuid))
 
 
-def define(args):
+def unarchive(args):
+    # TODO: 復帰の実装
     for vm_name in args.vm_names:
         if os.path.isfile(vm_name) is False:
             print("[error] 指定したファイルが見つかりませんでした．")
@@ -82,58 +84,58 @@ def define(args):
     tree.write(config.VBoxSettingPATH, encoding="UTF-8", xml_declaration=True)
 
 
-def undefine(args):
-    for vm_name in args.vm_names:
-        if os.path.isfile(vm_name) is False:
-            print("[error] 指定したファイルが見つかりませんでした．")
-            return -1
-        elif vm_name.split(".")[-1] != "vbox":
-            print("[error] 指定したファイルはvbox形式ではありません．")
-            return -1
-        else:
-            print("[info] {0}のファイルを読み込みました．".format(vm_name))
+def archive(args):
+    # init valiables
+    vm_uuid = args.vm_uuid[0]
+    vm_path = ''
+    tree = ET.parse(config.VBoxSettingPATH)
 
-        # GET directory DATA
-        vbox_xml = ET.parse(vm_name)
-        for node in vbox_xml.findall(".//{{{0}}}Machine".format(NameSpace)):
-            uuid = node.attrib["uuid"][1:-1]
+    # init xml file
+    root = tree.getroot()
+    ET.register_namespace('', NameSpace)
 
-        tree = ET.parse(config.VBoxSettingPATH)
-        root = tree.getroot()
-        ET.register_namespace('', NameSpace)
+    # Confirm the existence of uuid to xml file
+    error_flag = True
+    for node in tree.findall(".//{{{0}}}MachineEntry".format(NameSpace)):
+        if node.attrib["uuid"] == '{' + vm_uuid + '}':
+            error_flag = False
+            vm_path = node.attrib['src']
+    if error_flag is True:
+        print("[error] 指定したファイルは定義されていません")
+        return - 1
 
-        # get MachineEntry
-        error_flag = True
-        for node in tree.findall(".//{{{0}}}MachineEntry".format(NameSpace)):
-            if node.attrib["src"] == vm_name:
-                error_flag = False
-        if error_flag is True:
-            print("[error] 指定したファイルは定義されていません")
-            return -1
+    # remove to MachineRegistry
+    registry = tree.find(".//{{{0}}}MachineRegistry".format(NameSpace))
+    for entry in tree.findall(".//{{{0}}}MachineEntry".format(NameSpace)):
+        if entry.attrib["uuid"] == '{' + vm_uuid + '}':
+            registry.remove(entry)
 
-        # ADD to MachineRegistry
-        registry = tree.find(".//{{{0}}}MachineRegistry".format(NameSpace))
-        for entry in tree.findall(".//{{{0}}}MachineEntry".format(NameSpace)):
-            if entry.attrib['src'] == vm_name:
-                registry.remove(entry)
+    # remove to GroupDefinitions
+    definitions = tree.find(".//{{{0}}}ExtraDataItem[@name='GUI/GroupDefinitions/']".format(NameSpace))
+    new_values = []
+    for m in definitions.attrib["value"].split(","):
+        if m.find(vm_uuid) == -1:
+            new_values.append(m)
+    new_value = ','.join(new_values)
+    definitions.set('value', new_value)
 
-        # ADD to GroupDefinitions
-        definitions = tree.find(".//{{{0}}}ExtraDataItem[@name='GUI/GroupDefinitions/']".format(NameSpace))
-        new_values = []
-        for m in definitions.attrib["value"].split(","):
-            if m.find(uuid) == -1:
-                new_values.append(m)
-        new_value = ','.join(new_values)
-        definitions.set('value', new_value)
+    # Reflect changes in tree
+    tree = ET.ElementTree(root)
 
-        # ツリー反映
-        tree = ET.ElementTree(root)
+    # archive
+    com = "tar -zcvf {0}.tar.gz {1}".format(
+        os.path.join(config.ArchiveDir, vm_uuid),
+        os.path.basename(os.path.dirname(vm_path)))
+    subprocess.check_call(com.split(' '), cwd=os.path.dirname(os.path.dirname(vm_path)))
 
-        print("[info] {0}のファイルを未定義にしました．".format(vm_name))
-        print("cd {0} && open .".format(os.path.dirname(os.path.abspath(vm_name))))
+    # remove vm file
+    com = "rm -R {0}".format(os.path.dirname(vm_path))
+    subprocess.check_call(com.split(' '))
 
-    # XML保存
+    # save XML file
     tree.write(config.VBoxSettingPATH, encoding="UTF-8", xml_declaration=True)
+
+    print("[info] {0}を未定義にしました．".format(vm_uuid))
 
 
 def main():
@@ -147,15 +149,13 @@ def main():
     parser_add.add_argument('-a', '--all', action='store_true', help='Virtual Boxに登録されているVM + Dropbox上のアーカイブ', default=False)
     parser_add.set_defaults(handler=status)
 
-    parser_commit = subparsers.add_parser('define', description='VMを定義する', help='see `define -h`')
-    parser_commit.add_argument('-vn', '--vm_names', help='定義するVMのvboxのパス(複数指定可)', nargs='*', required=True)
-    #parser_commit.add_argument('-h', '--help', help='help')
-    parser_commit.set_defaults(handler=define)
+    parser_commit = subparsers.add_parser('unarchive', description='VMを元に戻す', help='see `unarchive -h`')
+    parser_commit.add_argument('-vu', '--vm_uuid', help='元に戻すVMのUUID', nargs=1, required=True)
+    parser_commit.set_defaults(handler=unarchive)
 
-    parser_commit = subparsers.add_parser('undefine', description='VMを定義から外す', help='see `undefine -h`')
-    parser_commit.add_argument('-vn', '--vm_names', help='定義から外すVM名(複数指定可)', nargs='*', required=True)
-    #parser_commit.add_argument('-h', '--help', help='help')
-    parser_commit.set_defaults(handler=undefine)
+    parser_commit = subparsers.add_parser('archive', description='VMをアーカイブする', help='see `archive -h`')
+    parser_commit.add_argument('-vu', '--vm_uuid', help='アーカイブするVMのUUID', nargs=1, required=True)
+    parser_commit.set_defaults(handler=archive)
 
     args = parser.parse_args()
 
@@ -166,10 +166,11 @@ def main():
         config_file = args.config_file
     config.read_file(config_file_path=config_file)
 
+    # execute
     if hasattr(args, 'handler'):
         args.handler(args)
     else:
-        # 未知のサブコマンドの場合はヘルプを表示
+        # if unknown option, show hint
         parser.print_help()
 
 
