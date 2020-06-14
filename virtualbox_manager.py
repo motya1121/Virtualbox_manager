@@ -29,7 +29,7 @@ def status(args):
     for uuid, dir_vbox in xml_vbox_dict.items():
         print("{uuid}: 定義済み (file: {f_name})".format(f_name=dir_vbox, uuid=uuid))
 
-    # GET directory DATA
+    # GET archived DATA
     if args.all is True:
         archive_file_path = os.path.join(config.ArchiveDir, 'archive_info.json')
         if os.path.isfile(archive_file_path):
