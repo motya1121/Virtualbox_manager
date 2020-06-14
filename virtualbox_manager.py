@@ -31,12 +31,12 @@ def status(args):
 
     # GET directory DATA
     if args.all is True:
-        dir_vbox_list = glob.glob('{0}**/*.vbox'.format(config.ArchiveDir), recursive=True)
-        for dir_vbox in dir_vbox_list:
-            vbox_xml = ET.parse(dir_vbox)
-            for node in vbox_xml.findall(".//{{{0}}}Machine".format(NameSpace)):
-                uuid = node.attrib["uuid"][1:-1]
-                print("{uuid}: 未定義   (file: {f_name})".format(f_name=dir_vbox, uuid=uuid))
+        archive_file_path = os.path.join(config.ArchiveDir, 'archive_info.json')
+        if os.path.isfile(archive_file_path):
+            with open(archive_file_path, 'r') as conf_file:
+                archive_info = json.load(conf_file)
+                for info in archive_info['vm_data']:
+                    print("{uuid}: 未定義   (name: {name})".format(name=info['name'], uuid=info['uuid']))
 
 
 def unarchive(args):
