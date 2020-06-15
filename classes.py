@@ -13,6 +13,7 @@ class CONFIG():
     def __init__(self):
         self.ArchiveDir = ""
         self.VBoxSettingPATH = ""
+        self.VBoxVMPATH = ''
         self.config_file_path = ""
         self.debug = False
 
@@ -61,6 +62,7 @@ class CONFIG():
             json_data = json.load(conf_file)
             self.ArchiveDir = json_data["ArchiveDir"]
             self.VBoxSettingPATH = json_data["VBoxSettingPATH"]
+            self.VBoxVMPATH = json_data['VBoxVMPATH']
             if "debug" in json_data.keys():
                 self.debug = json_data["debug"]
 

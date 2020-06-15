@@ -40,49 +40,80 @@ def status(args):
 
 
 def unarchive(args):
-    # TODO: 復帰の実装
-    for vm_name in args.vm_names:
-        if os.path.isfile(vm_name) is False:
-            print("[error] 指定したファイルが見つかりませんでした．")
+    # init valiables
+    vm_uuid = args.vm_uuid[0]
+    vm_name = ''
+    tree = ET.parse(config.VBoxSettingPATH)
+    archive_file_path = os.path.join(config.ArchiveDir, 'archive_info.json')
+
+    # Confirm existence of uuid in the archive directory
+    flag = False
+    if os.path.isfile(archive_file_path):
+        with open(archive_file_path, 'r') as conf_file:
+            archive_info = json.load(conf_file)
+            for info in archive_info['vm_data']:
+                if info['uuid'] == vm_uuid:
+                    vm_name = info['name']
+                    flag = True
+    else:
+        print("[error] アーカイブデータが見つかりませんでした．")
+        return - 1
+    if flag is False:
+        print("[error] アーカイブデータ内に指定したuuidが見つかりませんでした．")
+        return - 1
+
+    if os.path.isfile(os.path.join(config.ArchiveDir, '{0}.tar.gz'.format(vm_uuid))) is False:
+        print("[error] 指定したuuidのファイルが見つかりませんでした")
+        return - 1
+
+    # init xml file
+    root = tree.getroot()
+    ET.register_namespace('', NameSpace)
+
+    # get MachineEntry
+    for node in tree.findall(".//{{{0}}}MachineEntry".format(NameSpace)):
+        if node.attrib["uuid"] == vm_uuid:
+            print("[error] 指定したファイルはすでに定義されています．")
             return -1
-        elif vm_name.split(".")[-1] != "vbox":
-            print("[error] 指定したファイルはvbox形式ではありません．")
-            return -1
-        else:
-            print("[info] {0}のファイルを読み込みました．".format(vm_name))
 
-        # GET directory DATA
-        vbox_xml = ET.parse(vm_name)
-        for node in vbox_xml.findall(".//{{{0}}}Machine".format(NameSpace)):
-            uuid = node.attrib["uuid"][1:-1]
+    # ADD to MachineRegistry
+    registry = tree.find(".//{{{0}}}MachineRegistry".format(NameSpace))
+    new_entry = ET.SubElement(registry, '{{{0}}}MachineEntry'.format(NameSpace))
+    new_entry.set('uuid', '{{{0}}}'.format(vm_uuid))
+    new_entry.set('src', '{0}.vbox'.format(os.path.join(config.VBoxVMPATH, vm_name, vm_name)))
 
-        tree = ET.parse(config.VBoxSettingPATH)
-        root = tree.getroot()
-        ET.register_namespace('', NameSpace)
+    # ADD to GroupDefinitions
+    definitions = tree.find(".//{{{0}}}ExtraDataItem[@name='GUI/GroupDefinitions/']".format(NameSpace))
+    new_value = "{old_definitions},m={uuid}".format(old_definitions=definitions.attrib["value"], uuid=vm_uuid)
+    definitions.set('value', new_value)
 
-        # get MachineEntry
-        for node in tree.findall(".//{{{0}}}MachineEntry".format(NameSpace)):
-            if node.attrib["src"] == vm_name:
-                print("[error] 指定したファイルはすでに定義されています．")
-                return -1
-
-        # ADD to MachineRegistry
-        registry = tree.find(".//{{{0}}}MachineRegistry".format(NameSpace))
-        new_entry = ET.SubElement(registry, '{{{0}}}MachineEntry'.format(NameSpace))
-        new_entry.set('uuid', '{{{0}}}'.format(uuid))
-        new_entry.set('src', '{0}'.format(vm_name))
-
-        # ADD to GroupDefinitions
-        definitions = tree.find(".//{{{0}}}ExtraDataItem[@name='GUI/GroupDefinitions/']".format(NameSpace))
-        new_value = "{old_definitions},m={uuid}".format(old_definitions=definitions.attrib["value"], uuid=uuid)
-        definitions.set('value', new_value)
-
-        # ツリー反映
-        tree = ET.ElementTree(root)
-        print("[info] {0}のファイルを追加しました．".format(vm_name))
+    # ツリー反映
+    tree = ET.ElementTree(root)
+    print("[info] {0}のファイルを追加しました．".format(vm_name))
 
     # XML保存
     tree.write(config.VBoxSettingPATH, encoding="UTF-8", xml_declaration=True)
+
+    # unarchive
+    com = "tar -xzf {0}.tar.gz -C {1}".format(
+        os.path.join(config.ArchiveDir, vm_uuid),
+        config.VBoxVMPATH)
+    subprocess.check_call(com.split(' '))
+
+    # delete archive file
+    com = "rm {0}.tar.gz".format(os.path.join(config.ArchiveDir, vm_uuid))
+    subprocess.check_call(com.split(' '))
+
+    # update archive info
+    new_archive_info = {'vm_data': []}
+    archive_file_path = os.path.join(config.ArchiveDir, 'archive_info.json')
+    with open(archive_file_path, 'r') as conf_file:
+        archive_info = json.load(conf_file)
+        for info in archive_info['vm_data']:
+            if info['uuid'] != vm_uuid:
+                new_archive_info['vm_data'].append(info)
+    with open(archive_file_path, 'w') as conf_file:
+        json.dump(new_archive_info, conf_file, ensure_ascii=False, indent=4)
 
 
 def archive(args):
